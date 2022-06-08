@@ -175,6 +175,16 @@ sudo apt install build-essential autoconf automake-1.15 autotools-dev m4
 make
 ```
 
+## On macOS Monterey 12.4
+*Prerequisite - Install homebrew (GOOGLE IT)
+```
+brew install autoconf automake libtool sdl
+cd dosbox-0.74-3
+bash autogen.sh
+bash configure
+make
+```
+
 ## Enabling DOSBox Debugger
 ```
 ./configure --enable-debug
