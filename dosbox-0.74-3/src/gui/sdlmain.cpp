@@ -1475,7 +1475,7 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 	sdl.desktop.screen.EndUpdate( changedLines );
 #endif
 	}
-#endif
+
 
 void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) {
 	/* I should probably not change the GFX_PalEntry :) */
@@ -1489,7 +1489,7 @@ void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) {
 		}
 	}
 }
-
+#endif
 Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
 {	return sdl.desktop.screen.GetRgb( red, green, blue );	}
 
