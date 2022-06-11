@@ -1465,7 +1465,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 	}
 	return false;
 }
-#endif
+
 
 
 void GFX_EndUpdate( const Bit16u *changedLines ) {
@@ -1475,7 +1475,7 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 	sdl.desktop.screen.EndUpdate( changedLines );
 #endif
 	}
-
+#endif
 
 void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) {
 	/* I should probably not change the GFX_PalEntry :) */
