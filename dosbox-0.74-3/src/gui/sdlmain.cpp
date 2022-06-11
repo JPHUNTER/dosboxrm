@@ -1353,7 +1353,6 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bitu flags, Bit32u sdl_flags, Bit32u
 			sdl.clip.x = 0;
 			sdl.clip.y = 0;
 		}
-s
 	} else {
 		sdl.clip.x=0;sdl.clip.y=0;
 		sdl.clip.w=(Bit16u)(sdl.draw.width*sdl.draw.scalex);
