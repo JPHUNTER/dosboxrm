@@ -1448,7 +1448,6 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 		pitch=sdl.blit.surface->pitch;
 		sdl.updating=true;
 		return true;
-#endif
 
 #if C_OPENGL
 	case SCREEN_OPENGL:
@@ -1466,6 +1465,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 	}
 	return false;
 }
+#endif
 
 
 void GFX_EndUpdate( const Bit16u *changedLines ) {
