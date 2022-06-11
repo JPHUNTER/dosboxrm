@@ -6,6 +6,8 @@ I started this fork of DOSBox in order to run ReelMagic games. It would appear
 that no one else has done this, so I took this on as I really wanted to play the
 ReelMagic version of Return to Zork.
 
+Pixel Perfect Patch Added Read Below
+
 ## Contributors
 
 The following people have made this project a reality:
@@ -216,3 +218,84 @@ This is the awesome MPEG decoder library used for this project. This guy gets it
 * https://github.com/phoboslab/pl_mpeg
 
 
+##         DOSBox with pixel-perfect scaling
+##            and aspect-ratio correction
+##          (alpha 24, for DOSBox rev. 4253)
+
+This  patch  adds  three  modes  of software scaling
+based on the 'surface' output type and one  hardware
+scaling mode based on the 'opengl' output type:
+
+surfacepp (pixel-perfect):
+   Each  emulated  pixel  is  represented as a sharp
+   rectangle with  integral  dimensions  m x n  such
+   that  m:n  approximates  the desired pixel aspect
+   ratio (PAR), which depends on the emulated  reso-
+   lution  and  the 'aspect' setting in the [render]
+   section.  Whereas the  standard  PARs  are  them-
+   selves  ratios  of small integers, this mode will
+   yield the exact aspect ratio, provided the output
+   resolution is high enough for the game.
+
+surfacenp (near-perfect):
+   Upscales the image interpolatively with a minimum
+   of artefacts.  This is similar  to  supersampling
+   with a normaln<x> scaler beyond the display reso-
+   lution and then downscaling to the output  dimen-
+   sions via bilinear interpolation.  The new param-
+   eter 'surfacenp-sharpness' in the  [sdl]  section
+   attenuates  the  amount  of  interpoation.  It is
+   measured in percent, from 0 to 100, with the lat-
+   ter  value  corresponding to the nearest-neighbor
+   method.
+
+surfacenb (nearest-neighbor):
+   Equivalent to 'openglnb'.
+
+openglpp (pixel-perfect):
+   Same as 'surfacepp', but  using  OpenGL  hardware
+   acceleration.     The    new    boolean    option
+   `glfullvsync' turns  on  V-Sync  for  full-screen
+   OpenGL  output.  Try turing it off if the program
+   feels jerky.
+
+The new modes ignore "normal" scalers.
+
+The new value `desktop'  of  the  'windowresolution'
+parameter  causes DOSBox to make the window as large
+as the display and scaling method permit.
+
+The setting `fullborderless' causes DOSBox  to  emu-
+late  fullscreen  mode using a borderless window the
+size of the display.
+
+To avoid screen tearing, try specifying
+
+                fullborderless = true
+
+If it does't work or  doesn't  help,  revert  it  to
+false and set
+
+                fulldouble = true
+
+for surface output or
+
+                glfullvsync = true
+
+for  `openglpp'.   Depending on the refresh rates of
+the native and emulated graphical modes, the  latter
+two options may case jerky animation.
+
+With  LCD  displays, make certain always to use your
+display's native resolution in  fullscreen.   To  do
+that,  and  assuming you have configured the correct
+resolution in your OS, specify:
+
+                [sdl]
+                fullresolution=desktop
+
+Questions and comments are welcome at the Vogons fo-
+rum:
+
+ https://www.vogons.org/viewtopic.php?f=41&t=49160
+  [ VIDEO Patch for pixel-perfect scaling (SDL1) ]
