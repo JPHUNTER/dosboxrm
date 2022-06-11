@@ -1375,9 +1375,6 @@ Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,G
 	sdl.draw.scalex=scalex;
 	sdl.draw.scaley=scaley;
 
-	sdl.dbl_h = ( flags & GFX_DBL_H ) > 0;
-	sdl.dbl_w = ( flags & GFX_DBL_W ) > 0;
-
 	Bitu bpp=0;
 	Bitu retFlags = 0;
 
@@ -1452,12 +1449,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 		sdl.updating=true;
 		return true;
 #endif
-	case SCREEN_OVERLAY:
-		if (SDL_LockYUVOverlay(sdl.overlay)) return false;
-		pixels=(Bit8u *)*(sdl.overlay->pixels);
-		pitch=*(sdl.overlay->pitches);
-		sdl.updating=true;
-		return true;
+
 #if C_OPENGL
 	case SCREEN_OPENGL:
 		if(sdl.opengl.pixel_buffer_object) {
@@ -1477,15 +1469,12 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 
 
 void GFX_EndUpdate( const Bit16u *changedLines ) {
-	if (!sdl.updating)
+	#if (!sdl.updating)
 		return;
 	sdl.updating=false;
 	sdl.desktop.screen.EndUpdate( changedLines );
 #endif
-	default:
-		break;
 	}
-}
 
 
 void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) {
