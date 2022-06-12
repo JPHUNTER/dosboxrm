@@ -1492,7 +1492,7 @@ void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) {
 
 Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
 {	return sdl.desktop.screen.GetRgb( red, green, blue );	}
-#endif
+
 
 void GFX_Stop() {
 	if (sdl.updating)
@@ -2243,7 +2243,7 @@ void Config_Add_SDL() {
 	Pbool = sdl_sec->Add_bool("usescancodes",Property::Changeable::Always,true);
 	Pbool->Set_help("Avoid usage of symkeys, might not work on all operating systems.");
 }
-
+#endif
 static void show_warning(char const * const message) {
 	bool textonly = true;
 #ifdef WIN32
