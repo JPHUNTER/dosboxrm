@@ -1448,7 +1448,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 		pitch=sdl.blit.surface->pitch;
 		sdl.updating=true;
 		return true;
-
+#endif
 #if C_OPENGL
 	case SCREEN_OPENGL:
 		if(sdl.opengl.pixel_buffer_object) {
