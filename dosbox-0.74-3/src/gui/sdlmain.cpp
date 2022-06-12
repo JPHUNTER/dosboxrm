@@ -1489,9 +1489,10 @@ void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) {
 		}
 	}
 }
-#endif
+
 Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
 {	return sdl.desktop.screen.GetRgb( red, green, blue );	}
+#endif
 
 void GFX_Stop() {
 	if (sdl.updating)
