@@ -50,6 +50,8 @@
 #include "cpu.h"
 #include "cross.h"
 #include "control.h"
+#include "math.h"
+#include "pixelscale.h"
 
 #define MAPPERFILE "mapper-" VERSION ".map"
 //#define DISABLE_JOYSTICK
@@ -128,12 +130,47 @@ struct private_hwdata {
 #include <os2.h>
 #endif
 
-enum SCREEN_TYPES	{
-	SCREEN_SURFACE,
+/* ----------------------------- output-type-specific declarations --------------------- */
+/* TODO store them in a separate .h-file or together with output-type specific functions */
+enum SCREEN_TYPES
+{	SCREEN_SURFACE,
 	SCREEN_SURFACE_DDRAW,
 	SCREEN_OVERLAY,
 	SCREEN_OPENGL
 };
+
+typedef Bitu (*FGetBestMode)( Bitu *flags );
+typedef char (*FSetSize    )(Bitu width,Bitu height,Bitu flags,double scalex,double scaley, Bitu *retflags);typedef char (*FStartUpdate)( Bit8u **pixels, Bitu *pitch );
+typedef void (*FEndUpdate  )( const Bit16u *changedLines );
+typedef Bitu (*FGetRgb     )( Bit8u red, Bit8u green, Bit8u blue );
+typedef struct
+{	FGetBestMode GetBestMode;
+	FSetSize     SetSize;
+	FStartUpdate StartUpdate;
+	FEndUpdate   EndUpdate;
+	FGetRgb      GetRgb;} ScreenTypeInfo;
+
+typedef ScreenTypeInfo *PScreenTypeInfo;
+
+PScreenTypeInfo GetScreenTypeInfo( Bitu gotbpp, SCREEN_TYPES type );
+
+enum SURFACE_MODE
+{	SM_SIMPLE,
+	SM_PERFECT,
+	SM_SOFT,
+	SM_NEIGHBOR
+};
+
+typedef void (*F_SO_Init)(Bit16u w_in, Bit16u h_in, Bit16u *w_out, Bit16u *h_out, int* bpp );
+typedef void (*F_SO_EndUpdate)();
+
+typedef struct SurfaceModeInfo
+{
+	F_SO_Init      Init;
+	FStartUpdate   StartUpdate;
+	F_SO_EndUpdate EndUpdate;
+} SurfaceModeInfo;
+/* ------------------ end of output-type-specific declarations ------------------------ */
 
 enum PRIORITY_LEVELS {
 	PRIORITY_LEVEL_PAUSE,
@@ -144,6 +181,7 @@ enum PRIORITY_LEVELS {
 	PRIORITY_LEVEL_HIGHEST
 };
 
+enum GlKind { GlkBilinear, GlkNearest, GlkPerfect };
 
 struct SDL_Block {
 	bool inited;
@@ -152,6 +190,7 @@ struct SDL_Block {
 	struct {
 		Bit32u width;
 		Bit32u height;
+		double aspect;
 		Bit32u bpp;
 		Bitu flags;
 		double scalex,scaley;
@@ -180,10 +219,11 @@ struct SDL_Block {
 		GLuint texture;
 		GLuint displaylist;
 		GLint max_texsize;
-		bool bilinear;
+		enum GlKind kind;
 		bool packed_pixel;
 		bool paletted_texture;
 		bool pixel_buffer_object;
+		bool vsync;
 	} opengl;
 #endif
 	struct {
@@ -221,31 +261,44 @@ struct SDL_Block {
 
 static SDL_Block sdl;
 
+static void Cls( SDL_Surface *s )
+{	bool opengl = false;
+	unsigned char r = 0, g = 0, b = 0; // TODO: make it configurable?
+#if C_OPENGL
+	if ( ( s->flags & SDL_OPENGL) != 0 )
+	{	opengl = true;
+		glClearColor ((float)r/255, (float)g/255, (float)b/255, 1.0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		SDL_GL_SwapBuffers();
+		glClearColor ((float)r/255, (float)g/255, (float)b/255, 1.0);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+#endif //C_OPENGL
+	if( !opengl )
+	{	SDL_FillRect(s,NULL,SDL_MapRGB(s->format,r,g,b));
+		SDL_Flip(s);
+		SDL_FillRect(s,NULL,SDL_MapRGB(s->format,r,g,b));
+	}
+}
+
 #define SETMODE_SAVES 1  //Don't set Video Mode if nothing changes.
 #define SETMODE_SAVES_CLEAR 1 //Clear the screen, when the Video Mode is reused
 SDL_Surface* SDL_SetVideoMode_Wrap(int width,int height,int bpp,Bit32u flags){
 #if SETMODE_SAVES
+	SDL_Surface* s;
 	static int i_height = 0;
 	static int i_width = 0;
 	static int i_bpp = 0;
 	static Bit32u i_flags = 0;
+	bool opengl = false;
 	if (sdl.surface != NULL && height == i_height && width == i_width && bpp == i_bpp && flags == i_flags) {
-		// I don't see a difference, so disabled for now, as the code isn't finished either
+/*		// I don't see a difference, so disabled for now, as the code isn't finished either
 #if SETMODE_SAVES_CLEAR
-		//TODO clear it.
-#if C_OPENGL
-		if ((flags & SDL_OPENGL)==0) 
-			SDL_FillRect(sdl.surface,NULL,SDL_MapRGB(sdl.surface->format,0,0,0));
-		else {
-			glClearColor (0.0, 0.0, 0.0, 1.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-			SDL_GL_SwapBuffers();
-		}
-#else //C_OPENGL
-		SDL_FillRect(sdl.surface,NULL,SDL_MapRGB(sdl.surface->format,0,0,0));
-#endif //C_OPENGL
+		Cls( sdl.surface, 0, 0, 0 );
 #endif //SETMODE_SAVES_CLEAR
-		return sdl.surface;
+		return sdl.surface;*/
+		// Clear an existing surface, because it matter for borderless fullscreen window:
+		s = sdl.surface; goto Done;
 	}
 
 
@@ -258,7 +311,8 @@ SDL_Surface* SDL_SetVideoMode_Wrap(int width,int height,int bpp,Bit32u flags){
 	//Bug: we end up with a locked mouse cursor, but at least that beats crashing. (output=opengl,aspect=true,fullscreen=true)
 	if((i_flags&SDL_OPENGL) && !(flags&SDL_OPENGL) && (i_flags&SDL_FULLSCREEN) && !(flags&SDL_FULLSCREEN)){
 		GFX_SwitchFullScreen();
-		return SDL_SetVideoMode_Wrap(width,height,bpp,flags);
+		s = SDL_SetVideoMode_Wrap(width,height,bpp,flags);
+		goto Done;
 	}
 
 	//PXX
@@ -267,7 +321,7 @@ SDL_Surface* SDL_SetVideoMode_Wrap(int width,int height,int bpp,Bit32u flags){
 	}
 #endif //WIN32
 #endif //SETMODE_SAVES
-	SDL_Surface* s = SDL_SetVideoMode(width,height,bpp,flags);
+	s = SDL_SetVideoMode(width,height,bpp,flags);
 #if SETMODE_SAVES
 	if (s == NULL) return s; //Only store when successful
 	i_height = height;
@@ -275,6 +329,7 @@ SDL_Surface* SDL_SetVideoMode_Wrap(int width,int height,int bpp,Bit32u flags){
 	i_bpp = bpp;
 	i_flags = flags;
 #endif
+	Done: Cls( s );
 	return s;
 }
 
@@ -970,29 +1025,8 @@ void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) {
 	}
 }
 
-Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue) {
-	switch (sdl.desktop.type) {
-	case SCREEN_SURFACE:
-	case SCREEN_SURFACE_DDRAW:
-		return SDL_MapRGB(sdl.surface->format,red,green,blue);
-	case SCREEN_OVERLAY:
-		{
-			Bit8u y =  ( 9797*(red) + 19237*(green) +  3734*(blue) ) >> 15;
-			Bit8u u =  (18492*((blue)-(y)) >> 15) + 128;
-			Bit8u v =  (23372*((red)-(y)) >> 15) + 128;
-#ifdef WORDS_BIGENDIAN
-			return (y << 0) | (v << 8) | (y << 16) | (u << 24);
-#else
-			return (u << 0) | (y << 8) | (v << 16) | (y << 24);
-#endif
-		}
-	case SCREEN_OPENGL:
-//		return ((red << 0) | (green << 8) | (blue << 16)) | (255 << 24);
-		//USE BGRA
-		return ((blue << 0) | (green << 8) | (red << 16)) | (255 << 24);
-	}
-	return 0;
-}
+Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue)
+{	return sdl.desktop.screen.GetRgb( red, green, blue );	}
 
 void GFX_Stop() {
 	if (sdl.updating)
@@ -1124,43 +1158,13 @@ static void GUI_StartUp(Section * sec) {
 	sdl.mouse.locked=false;
 	mouselocked=false; //Global for mapper
 	sdl.mouse.requestlock=false;
-	sdl.desktop.full.fixed=false;
-	const char* fullresolution=section->Get_string("fullresolution");
-	sdl.desktop.full.width  = 0;
-	sdl.desktop.full.height = 0;
-	if(fullresolution && *fullresolution) {
-		char res[100];
-		safe_strncpy( res, fullresolution, sizeof( res ));
-		fullresolution = lowcase (res);//so x and X are allowed
-		if (strcmp(fullresolution,"original")) {
-			sdl.desktop.full.fixed = true;
-			if (strcmp(fullresolution,"desktop")) { //desktop = 0x0
-				char* height = const_cast<char*>(strchr(fullresolution,'x'));
-				if (height && * height) {
-					*height = 0;
-					sdl.desktop.full.height = (Bit16u)atoi(height+1);
-					sdl.desktop.full.width  = (Bit16u)atoi(res);
-				}
-			}
-		}
-	}
 
-	sdl.desktop.window.width  = 0;
-	sdl.desktop.window.height = 0;
-	const char* windowresolution=section->Get_string("windowresolution");
-	if(windowresolution && *windowresolution) {
-		char res[100];
-		safe_strncpy( res,windowresolution, sizeof( res ));
-		windowresolution = lowcase (res);//so x and X are allowed
-		if(strcmp(windowresolution,"original")) {
-			char* height = const_cast<char*>(strchr(windowresolution,'x'));
-			if(height && *height) {
-				*height = 0;
-				sdl.desktop.window.height = (Bit16u)atoi(height+1);
-				sdl.desktop.window.width  = (Bit16u)atoi(res);
-			}
-		}
-	}
+	ResKind deskRes = ParseRes
+	(	(char*)section->Get_string("fullresolution"),
+		&sdl.desktop.full.width, &sdl.desktop.full.height
+	);
+	// fix the fullscreen resolution for a borderelss window:
+	sdl.desktop.full.fixed = sdl.desktop.fullborderless || deskRes != RES_ORIGINAL;
 	sdl.desktop.doublebuf=section->Get_bool("fulldouble");
 #if SDL_VERSION_ATLEAST(1, 2, 10)
 #ifdef WIN32
@@ -1202,6 +1206,16 @@ static void GUI_StartUp(Section * sec) {
 		sdl.desktop.full.height=768;
 #endif
 	}
+	ResKind windowRes = ParseRes
+	(	(char*)section->Get_string("windowresolution"),
+		&sdl.desktop.window.width, &sdl.desktop.window.height
+	);
+	if( windowRes == RES_DESKTOP )
+	{	// Ant_222: I don't know how else to correct for the window borders:
+		sdl.desktop.window.height = sdl.desktop.full.height - 42;
+		sdl.desktop.window.width  = sdl.desktop.full.width  - 16;
+	}
+
 	sdl.mouse.autoenable=section->Get_bool("autolock");
 	if (!sdl.mouse.autoenable) SDL_ShowCursor(SDL_DISABLE);
 	sdl.mouse.autolock=false;
@@ -1240,6 +1254,7 @@ static void GUI_StartUp(Section * sec) {
 		LOG_MSG("Could not initialize OpenGL, switching back to surface");
 		sdl.desktop.want_type=SCREEN_SURFACE;
 	} else {
+	sdl.opengl.vsync = section->Get_bool("glfullvsync");
 	sdl.opengl.buffer=0;
 	sdl.opengl.framebuf=0;
 	sdl.opengl.texture=0;
