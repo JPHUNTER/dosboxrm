@@ -496,6 +496,7 @@ void GetChangedLines( const Bit16u *changedLines )
 		index++;
 	}
 }
+}
 
 static void GetAvailableArea( Bit16u *width, Bit16u *height, bool *fixed )
 {	*fixed = false;
@@ -1721,6 +1722,7 @@ static void GUI_StartUp(Section * sec) {
 	} else if (output == "surfacenb") {
 		sdl.desktop.want_type=SCREEN_SURFACE;
 		sdl.SurfaceMode = SM_NEIGHBOR;
+ #endif
  #if C_DDRAW
 	} else if (output == "ddraw") {
 		sdl.desktop.want_type=SCREEN_SURFACE_DDRAW;
@@ -2182,19 +2184,17 @@ void Config_Add_SDL() {
 #else
 	};
 	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,"surface");
-#if C_OPENGL
-	"openglpp"
-#else
-	"surfacepp"
 #endif
-	);
-	Pstring->Set_help
-	Pstring->Set_help("What video system to use for output.");
+#if C_OPENGL
+	"openglpp";
+#else
+	"surfacepp";
+#endif
+	Pstring->Set_help("What video system to use for output."
 		"Some values are aliases for output-scaler combinations:\n"
 		"  surfacepp and openglpp -- pixel-perfect scaling;\n"
 		"  surfacenp -- near-perfect scaling via bilinear interpolation;\n"
-		"  surfacenb and openglnb -- nearest-neighbor scaling."
-	);
+		"  surfacenb and openglnb -- nearest-neighbor scaling.");
 	Pint = sdl_sec->Add_int("surfacenp-sharpness",Property::Changeable::Always,50);
 	Pint->SetMinMax(0, 100);
 	Pint->Set_help
