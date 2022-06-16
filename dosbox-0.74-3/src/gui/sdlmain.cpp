@@ -50,6 +50,7 @@
 #include "keyboard.h"
 #include "cpu.h"
 #include "cross.h"
+#include "control.h"
 #include "render.h"
 
 #define MAPPERFILE "mapper-" VERSION ".map"
