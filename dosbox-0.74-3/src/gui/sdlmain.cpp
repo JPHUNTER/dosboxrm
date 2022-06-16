@@ -737,8 +737,7 @@ dosurface:
 		}
 		sdl.opengl.framebuf=0;
 		if (!(flags&GFX_CAN_32)) goto dosurface;
-		int texsize=2 << int_log2(width > height ? width : height);
-				int texsize = (width > height ? width : height);
+		int texsize = (width > height ? width : height);
 
 		if (texsize>sdl.opengl.max_texsize) {
 			LOG_MSG("SDL:OPENGL:No support for texturesize of %d, falling back to surface",texsize);
