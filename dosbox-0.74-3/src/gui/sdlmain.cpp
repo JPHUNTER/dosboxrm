@@ -1700,7 +1700,7 @@ void GFX_ShowMsg(char const* format,...) {
 
 
 void Config_Add_SDL() {
-	Section_prop * sdl_sec=control->AddSection_prop("sdl",&GUI_StartUp);
+	//Section_prop * sdl_sec=control->AddSection_prop("sdl",&GUI_StartUp);
 	sdl_sec->AddInitFunction(&MAPPER_StartUp);
 	Prop_bool* Pbool;
 	Prop_string* Pstring;
