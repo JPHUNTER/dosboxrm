@@ -503,6 +503,15 @@ void ReelMagic_RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double r
   _vgaRatio             = ratio;
   _vgaDoubleWidth       = dblw;
   _vgaDoubleHeight      = dblh;
+  if ((dblw || dblh) && render.pixelPerfect) {
+        // pixel perfect mode handles doubling on its own
+        dblw = false;
+        dblh = false;
+  }
+
+
+
+
 
   SetupVideoMixer(!_mpegDictatesOutputSize);
 }
