@@ -1440,6 +1440,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	if ( width >= 640 && height >= 480 ) {
 		aspect_ratio = ((float)width / (float)height) * ( 3.0 / 4.0);
 	}
+
 //	LOG_MSG("ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );
 
 	bool fps_changed = false;

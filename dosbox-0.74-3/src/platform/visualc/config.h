@@ -1,4 +1,4 @@
-#define VERSION "0.74-3"
+#define VERSION "0.74-3 Reelmagic with pixel-perfect fork"
 
 /* Define to 1 to enable internal debugger, requires libcurses */
 #define C_DEBUG 0

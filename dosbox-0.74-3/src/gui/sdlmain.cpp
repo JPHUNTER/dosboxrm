@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <math.h>
 #ifdef WIN32
 #include <signal.h>
 #include <process.h>
@@ -49,7 +50,7 @@
 #include "keyboard.h"
 #include "cpu.h"
 #include "cross.h"
-#include "control.h"
+#include "render.h"
 
 #define MAPPERFILE "mapper-" VERSION ".map"
 //#define DISABLE_JOYSTICK
@@ -449,6 +450,93 @@ static int int_log2 (int val) {
 	log++;
     return log;
 }
+double ToPositiveScale(double value) {
+    return value > 1.0 ? value : 1.0 / value;
+}
+
+/**
+ * Finds the largest integer scale, where the image is contained on the screen (maxWidth x maxHeight).
+ * X and Y scales may be different when aspect ratio correction is enabled or when horizontal pixel
+ * doubling is required.
+ */
+
+void GetBestIntScale(int maxWidth, int maxHeight, int * outXScale, int * outYScale) {
+    int doubleWidth;
+    double ratio;
+    int width = sdl.draw.width;
+    int height= sdl.draw.height;
+
+    // determine if double width is required and calculate correct aspect ratio accordingly
+    if (render.aspect) {
+        doubleWidth = render.src.dblw && !render.src.dblh ? 2 : 1;
+
+        if (doubleWidth == 2 && sdl.draw.scaley > 1.99) { // fix for 400x300
+            doubleWidth = 1;
+            sdl.draw.scaley = ((double)height * sdl.draw.scaley) / ((double)height * 2.0);
+        }
+
+        ratio = sdl.draw.scalex == 1.0 ? sdl.draw.scaley : 1.0 / sdl.draw.scalex;
+
+        if (ratio != 1.0 && doubleWidth == 2) {
+            ratio = ((double)width * 2.0) / ((double)height * ratio);
+        }
+    } else {
+        doubleWidth = height > width ? 2 : 1;
+        ratio = 1.0;
+    }
+    double targetAspect = (double)(width * doubleWidth) / ((double)height * ratio);
+    double aspectDifference;
+    const double maxAllowedAspectDifference = 1.15;
+    int xScaleSmall, yScaleSmall, xScaleLarge, yScaleLarge;
+    *outXScale = 1 * doubleWidth;
+    *outYScale = 1;
+	
+	    // Try all the integer scales starting from 2 and save the largest one that fits;
+    // if a scale doesn't fit, return the saved scales.
+    // If an aspect ratio resulting from integer pixels differs too greatly from the intended
+    // aspect ratio, don't do any AR correction.
+    for (int scale = 2; ; scale++) {
+        if (ratio >= 1.0) {
+            xScaleSmall = (int)round((double)scale * (double)doubleWidth / ratio);
+            yScaleSmall = scale;   
+            aspectDifference = ToPositiveScale( ((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect );
+            if (aspectDifference > maxAllowedAspectDifference) {
+                xScaleSmall = scale * doubleWidth;
+            }
+            xScaleLarge = scale * doubleWidth;
+            yScaleLarge = (int)round((double)scale * ratio);
+            aspectDifference = ToPositiveScale( ((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect );
+            if (aspectDifference > maxAllowedAspectDifference) {
+                yScaleLarge = scale;
+            }
+        } else {
+            xScaleSmall = scale * doubleWidth;
+            yScaleSmall = (int)round((double)scale * ratio);
+            aspectDifference = ToPositiveScale(((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect);
+            if (aspectDifference > maxAllowedAspectDifference) {
+                yScaleSmall = scale;
+            }
+            xScaleLarge = (int)round((double)scale * (double)doubleWidth / ratio);
+            yScaleLarge = scale;
+            aspectDifference = ToPositiveScale(((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect);
+            if (aspectDifference > maxAllowedAspectDifference) {
+                xScaleLarge = scale * doubleWidth;
+            }
+
+        }
+
+        if (width * xScaleLarge <= maxWidth && height * yScaleLarge <= maxHeight) {
+            *outXScale = xScaleLarge;
+            *outYScale = yScaleLarge;
+        } else if (width * xScaleSmall <= maxWidth && height * yScaleSmall <= maxHeight) {
+            *outXScale = xScaleSmall;
+            *outYScale = yScaleSmall;
+        } else {
+            return;
+        }
+    }
+}
+
 
 
 static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
@@ -467,7 +555,15 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 	if (fixedWidth && fixedHeight) {
 		double ratio_w=(double)fixedWidth/(sdl.draw.width*sdl.draw.scalex);
 		double ratio_h=(double)fixedHeight/(sdl.draw.height*sdl.draw.scaley);
-		if ( ratio_w < ratio_h) {
+        if (render.pixelPerfect) {
+            int scaleX, scaleY;
+            GetBestIntScale(fixedWidth, fixedHeight, &scaleX, &scaleY);
+
+            sdl.clip.w = (Bit16u)(sdl.draw.width * scaleX);
+            sdl.clip.h = (Bit16u)(sdl.draw.height * scaleY);
+
+		} else if (ratio_w < ratio_h) {
+
 			sdl.clip.w=fixedWidth;
 			sdl.clip.h=(Bit16u)(sdl.draw.height*sdl.draw.scaley*ratio_w + 0.1); //possible rounding issues
 		} else { 
@@ -545,24 +641,6 @@ dosurface:
 		} else {
 			sdl.clip.x=0;sdl.clip.y=0;
 			sdl.surface=SDL_SetVideoMode_Wrap(width,height,bpp,(flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE);
-#ifdef WIN32
-			if (sdl.surface == NULL) {
-				SDL_QuitSubSystem(SDL_INIT_VIDEO);
-				if (!sdl.using_windib) {
-					LOG_MSG("Failed to create hardware surface.\nRestarting video subsystem with windib enabled.");
-					putenv("SDL_VIDEODRIVER=windib");
-					sdl.using_windib=true;
-				} else {
-					LOG_MSG("Failed to create hardware surface.\nRestarting video subsystem with directx enabled.");
-					putenv("SDL_VIDEODRIVER=directx");
-					sdl.using_windib=false;
-				}
-				SDL_InitSubSystem(SDL_INIT_VIDEO);
-				GFX_SetIcon(); //Set Icon again
-				sdl.surface = SDL_SetVideoMode_Wrap(width,height,bpp,SDL_HWSURFACE);
-				if(sdl.surface) GFX_SetTitle(-1,-1,false); //refresh title.
-			}
-#endif
 			if (sdl.surface == NULL)
 				E_Exit("Could not set windowed video mode %ix%i-%i: %s",width,height,bpp,SDL_GetError());
 		}
@@ -660,6 +738,8 @@ dosurface:
 		sdl.opengl.framebuf=0;
 		if (!(flags&GFX_CAN_32)) goto dosurface;
 		int texsize=2 << int_log2(width > height ? width : height);
+				int texsize = (width > height ? width : height);
+
 		if (texsize>sdl.opengl.max_texsize) {
 			LOG_MSG("SDL:OPENGL:No support for texturesize of %d, falling back to surface",texsize);
 			goto dosurface;
@@ -698,7 +778,7 @@ dosurface:
 		// No borders
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-		if (sdl.opengl.bilinear) {
+		if (sdl.opengl.bilinear && !render.pixelPerfect) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		} else {
@@ -1488,13 +1568,7 @@ void GFX_Events() {
 					CPU_Disable_SkipAutoAdjust();
 				} else {
 					if (sdl.mouse.locked) {
-#ifdef WIN32
-						if (sdl.desktop.fullscreen) {
-							VGA_KillDrawing();
-							sdl.desktop.fullscreen=false;
-							GFX_ResetScreen();
-						}
-#endif
+
 						GFX_CaptureMouse();
 					}
 					SetPriority(sdl.priority.nofocus);
@@ -1640,7 +1714,7 @@ void Config_Add_SDL() {
 	Pbool = sdl_sec->Add_bool("fulldouble",Property::Changeable::Always,false);
 	Pbool->Set_help("Use double buffering in fullscreen. It can reduce screen flickering, but it can also result in a slow DOSBox.");
 
-	Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"original");
+	Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"desktop");
 	Pstring->Set_help("What resolution to use for fullscreen: original, desktop or fixed size (e.g. 1024x768).\n"
 	                  "  Using your monitor's native resolution (desktop) with aspect=true might give the best results.\n"
 			  "  If you end up with small window on a large screen, try an output different from surface.\n"
@@ -1662,7 +1736,14 @@ void Config_Add_SDL() {
 #if C_OPENGL && defined(MACOSX)
 	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,"opengl");
 #else
-	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,"surface");
+	const char* defoutput;
+#if C_OPENGL
+	defoutput = "openglnb";
+#else
+	defoutput = "surface";
+#endif
+	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,defoutput);
+
 #endif
 	Pstring->Set_help("What video system to use for output.");
 	Pstring->Set_values(outputs);
@@ -1898,6 +1979,7 @@ int main(int argc, char* argv[]) {
 
 #if defined(WIN32)
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE) ConsoleEventHandler,TRUE);
+	SetProcessDPIAware();
 #endif
 
 #ifdef OS2
@@ -1915,6 +1997,9 @@ int main(int argc, char* argv[]) {
 	LOG_MSG("---");
 
 	/* Init SDL */
+	    putenv("SDL_VIDEO_WINDOW_POS");
+    putenv("SDL_VIDEO_CENTERED=1");
+
 #if SDL_VERSION_ATLEAST(1, 2, 14)
 	/* Or debian/ubuntu with older libsdl version as they have done this themselves, but then differently.
 	 * with this variable they will work correctly. I've only tested the 1.2.14 behaviour against the windows version
