@@ -392,9 +392,8 @@ static void SetupVideoMixer(const bool updateRenderMode) {
     _renderHeight = _mpegPictureWidth;
   }
   else if (_vgaDup5Enabled) {
-    //experiment with 5x multiplication
-    _renderWidth  = (_vgaWidth) * 5;
-    _renderHeight = ((_vgaHeight / 5) * 6) * 5;
+    _renderWidth  = (_vgaWidth);
+    _renderHeight = (_vgaHeight / 5) * 6;
   }
   else {
     _renderWidth  = _vgaWidth;
